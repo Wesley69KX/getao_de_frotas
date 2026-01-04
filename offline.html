@@ -3,81 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sem Conexão</title>
-    
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-
+    <title>Offline</title>
     <style>
-        /* CSS EMBUTIDO - FUNCIONA SEMPRE */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f2f5;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            text-align: center;
-        }
-
-        .icon-box {
-            background-color: #e9ecef;
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-
-        /* Tenta usar Material Icon, se falhar, usa emoji */
-        .material-icons { font-size: 50px; color: #6c757d; }
-
-        h1 { margin: 0 0 10px 0; color: #0056b3; font-size: 24px; }
-        
-        p { color: #666; margin-bottom: 30px; font-size: 16px; line-height: 1.5; max-width: 300px; }
-
-        .btn-retry {
-            background-color: #0056b3;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: background 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-retry:active { transform: scale(0.98); background-color: #004494; }
-
-        .footer { margin-top: 40px; font-size: 12px; color: #999; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f4f6f8; text-align: center; color: #333; margin: 0; }
+        h1 { color: #dc3545; margin-bottom: 10px; }
+        p { color: #666; margin-bottom: 30px; }
+        button { background: #0056b3; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <div class="icon-box">
-        <span class="material-icons">wifi_off</span>
-    </div>
-
-    <h1>Você está Offline</h1>
-    
-    <p>Não foi possível carregar o sistema. Verifique sua conexão com a internet e tente novamente.</p>
-    
-    <button class="btn-retry" onclick="window.location.reload()">
-        Tentar Conectar
-    </button>
-
-    <div class="footer">
-        Gestão de Torres - Modo Offline
-    </div>
-
+    <h1 style="font-size: 50px;">📡🚫</h1>
+    <h1>Sistema Offline</h1>
+    <p>Você precisa de internet para acessar o sistema de frota.</p>
+    <button onclick="window.location.reload()">Tentar Conectar</button>
 </body>
 </html>
