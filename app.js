@@ -24,256 +24,49 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
 
     },
 
-  checklistItemsData: [{id:"1",text:"Nível Óleo/Água"},{id:"2",text:"Freios"},{id:"3",text:"Pneus"},{id:"4",text:"Luzes"},{id:"5",text:"Limpeza"}],
+ checklistItemsData: [{id:"1",text:"Nível Óleo/Água"},{id:"2",text:"Freios"},{id:"3",text:"Pneus"},{id:"4",text:"Luzes"},{id:"5",text:"Limpeza"}],
 
     async initApp() {
         if(LOGO_BASE64) {
             const els = ['app-logo', 'header-logo'];
             els.forEach(id => { const el = document.getElementById(id); if(el) { el.src = LOGO_BASE64; el.style.display = 'block'; }});
         }
-
-        // --- MUDANÇA: REMOVIDO SAÚDE E EDUCAÇÃO ---
         const savedSectors = localStorage.getItem('sectors');
         if(savedSectors) {
             this.sectors = JSON.parse(savedSectors);
         } else {
-            // Padrão atualizado conforme pedido
             this.sectors = ['OBRAS', 'ADM']; 
             localStorage.setItem('sectors', JSON.stringify(this.sectors));
         }
         this.renderSectorButtons();
     },
 
-    // --- BANCO DE DADOS ---
-    async init() {
-        try {
-            if (!firebase.apps.length) firebase.initializeApp(this.firebaseConfig);
-            this.db = firebase.firestore();
-            
-            this.dbLocal = await idb.openDB('gestao-frota-v2', 1, {
-                upgrade(db) {
-                    if (!db.objectStoreNames.contains('vehicles')) db.createObjectStore('vehicles', { keyPath: 'id' });
-                    if (!db.objectStoreNames.contains('stock')) db.createObjectStore('stock', { keyPath: 'id' });
-                },
-            });
-
-            await this.loadWorkshops(); // Carrega oficinas globalmente
-            await this.loadFromLocal();
-
-            // Listener Veículos
-            this.db.collection(this.collectionName).onSnapshot(async (snap) => {
-                document.getElementById('loading-msg').style.display = 'none';
-                let data = [];
-                snap.forEach(doc => { let d = doc.data(); d._collection = this.collectionName; data.push(d); });
-                await this.mergeData(data);
-            });
-            
-            // Listener Estoque
-            this.db.collection(`estoque_${this.currentLocation}`).onSnapshot(async (snap) => {
-                let data = []; snap.forEach(doc => data.push(doc.data())); this.stock = data;
-            });
-
-        } catch (e) { console.error(e); }
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
-    },
-
-    // --- GESTÃO DE OFICINAS ---
-    async loadWorkshops() {
-        // Carrega oficinas de uma coleção global de configuração
-        const snap = await this.db.collection('config_workshops').get();
-        this.workshops = [];
-        snap.forEach(doc => this.workshops.push(doc.data()));
-        this.renderWorkshopsList();
-    },
-
-    async addWorkshop() {
-        const name = document.getElementById('new-workshop-name').value.trim();
-        if(!name) return;
-        const ws = { id: Date.now().toString(), name: name };
-        await this.db.collection('config_workshops').doc(ws.id).set(ws);
-        this.workshops.push(ws);
-        document.getElementById('new-workshop-name').value = '';
-        this.renderWorkshopsList();
-    },
-
-    openWorkshops() {
-        document.getElementById('workshops-modal').style.display = 'flex';
-        this.renderWorkshopsList();
-    },
-
-    renderWorkshopsList() {
-        const c = document.getElementById('workshops-list');
-        const select = document.getElementById('f-oficina');
+    // --- NOVA FUNÇÃO: FAXINEIRO DE FOTOS ---
+    cleanupHistory(history) {
+        if (!history || !Array.isArray(history)) return [];
         
-        // Renderiza no Modal
-        if(c) {
-            c.innerHTML = '';
-            this.workshops.forEach(ws => {
-                const div = document.createElement('div');
-                div.style = "padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;";
-                div.innerHTML = `<span>${ws.name}</span><button onclick="app.deleteWorkshop('${ws.id}')" style="color:red;border:none;background:none;">X</button>`;
-                c.appendChild(div);
-            });
-        }
+        const NOW = new Date();
+        const LIMIT_DAYS = 60; // Ciclo de 2 meses
 
-        // Renderiza no Select do Veículo
-        if(select) {
-            select.innerHTML = '<option value="">Selecione a Oficina...</option>';
-            this.workshops.forEach(ws => {
-                const opt = document.createElement('option');
-                opt.value = ws.name; // Salvamos o nome direto para facilitar
-                opt.innerText = ws.name;
-                select.appendChild(opt);
-            });
-        }
-    },
-    
-    async deleteWorkshop(id) {
-        if(!confirm("Apagar oficina?")) return;
-        await this.db.collection('config_workshops').doc(id).delete();
-        this.workshops = this.workshops.filter(w => w.id !== id);
-        this.renderWorkshopsList();
-    },
+        return history.map(entry => {
+            // Se não tiver data, ignora
+            if (!entry.date) return entry;
 
-    toggleWorkshopSelect() {
-        const status = document.getElementById('f-status').value;
-        const div = document.getElementById('div-oficina');
-        if(status === 'Manutenção') div.style.display = 'block';
-        else div.style.display = 'none';
-    },
+            // Calcula a diferença de dias
+            const entryDate = new Date(entry.date + 'T12:00:00');
+            const diffTime = Math.abs(NOW - entryDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    // --- DASHBOARD (Onde estão os carros?) ---
-    async openDashboard() {
-        document.getElementById('dashboard-modal').style.display = 'flex';
-        const list = document.getElementById('dashboard-workshops-list');
-        list.innerHTML = '<p>Carregando dados de todas as secretarias...</p>';
-
-        let totalCars = 0;
-        let maintenanceCars = 0;
-        let carsByWorkshop = {};
-
-        // 1. Varre TODAS as secretarias cadastradas
-        for (const sec of this.sectors) {
-            const collName = `frota_${sec}`;
-            const snap = await this.db.collection(collName).get();
-            
-            snap.forEach(doc => {
-                const car = doc.data();
-                totalCars++;
-                if(car.status === 'Manutenção') {
-                    maintenanceCars++;
-                    const oficina = car.workshopName || 'Não Informada';
-                    
-                    if(!carsByWorkshop[oficina]) carsByWorkshop[oficina] = [];
-                    carsByWorkshop[oficina].push({ ...car, sector: sec });
-                }
-            });
-        }
-
-        // 2. Atualiza Números
-        document.getElementById('dash-total').innerText = totalCars;
-        document.getElementById('dash-maintenance').innerText = maintenanceCars;
-
-        // 3. Renderiza Lista
-        list.innerHTML = '';
-        if(maintenanceCars === 0) {
-            list.innerHTML = '<p style="text-align:center; color:green; margin-top:20px;">Nenhum veículo em manutenção!</p>';
-            return;
-        }
-
-        for (const [oficina, cars] of Object.entries(carsByWorkshop)) {
-            const group = document.createElement('div');
-            group.className = 'workshop-group';
-            
-            let html = `<div class="workshop-header">🏢 ${oficina} (${cars.length})</div>`;
-            cars.forEach(c => {
-                html += `
-                <div class="workshop-item">
-                    <div><strong>${c.placa}</strong> - ${c.modelo}</div>
-                    <div style="font-size:0.8rem; background:#0056b3; color:white; padding:2px 6px; border-radius:4px;">${c.sector}</div>
-                </div>`;
-            });
-            group.innerHTML = html;
-            list.appendChild(group);
-        }
-    },
-
-    // --- RELATÓRIO COM MODO GLOBAL ---
-    async generatePeriodReport() {
-        const type = document.getElementById('rep-type').value;
-        const start = document.getElementById('rep-start').value;
-        const end = document.getElementById('rep-end').value;
-        
-        if(!start || !end) return alert("Selecione as datas");
-
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-
-        // Dados
-        let allVehicles = [];
-
-        if (type === 'global') {
-            // Busca de todas as secretarias
-            for (const sec of this.sectors) {
-                const snap = await this.db.collection(`frota_${sec}`).get();
-                snap.forEach(doc => allVehicles.push(doc.data()));
+            // Se for mais velho que 60 dias e tiver fotos, apaga AS FOTOS (mantém o texto)
+            if (diffDays > LIMIT_DAYS && entry.photos && entry.photos.length > 0) {
+                console.log(`[Auto-Limpeza] Apagando fotos antigas de: ${entry.date}`);
+                delete entry.photos; // Remove a propriedade de fotos para liberar espaço
             }
-        } else {
-            // Apenas atual
-            allVehicles = this.vehicles;
-        }
-
-        // ... (Mesma lógica de Capa e Tabela do código anterior) ...
-        // CAPA
-        if(LOGO_BASE64) await this.drawSmartLogo(doc, LOGO_BASE64, 55, 60, 100, 60);
-        doc.setFontSize(22); doc.text("RELATÓRIO DE GESTÃO DE FROTA", 105, 140, {align:"center"});
-        doc.setFontSize(14); doc.text(type === 'global' ? "Relatório Unificado (Todas Secretarias)" : `Setor: ${this.currentLocation}`, 105, 155, {align:"center"});
-        doc.setFontSize(12); doc.text(`${this.fmtDate(start)} a ${this.fmtDate(end)}`, 105, 165, {align:"center"});
-        
-        // TABELA
-        doc.addPage();
-        let body = [];
-        let photos = [];
-        const dStart = new Date(start); const dEnd = new Date(end);
-
-        allVehicles.forEach(v => {
-            if(v.maintenanceHistory) {
-                v.maintenanceHistory.forEach(log => {
-                    const d = new Date(log.date);
-                    if(d >= dStart && d <= dEnd) {
-                        body.push([this.fmtDate(log.date), v.placa, v.modelo, log.desc, v.workshopName || '-']);
-                        if(v.fotos && v.fotos.length > 0 && !photos.find(x=>x.id===v.id)) photos.push(v);
-                    }
-                });
-            }
+            return entry;
         });
-
-        if(body.length===0) return alert("Nada encontrado.");
-
-        doc.autoTable({
-            startY: 20, head: [['Data', 'Placa', 'Modelo', 'Serviço', 'Oficina']], body: body, theme:'grid'
-        });
-
-        // FOTOS
-        if(photos.length > 0) {
-            doc.addPage();
-            doc.text("ANEXO FOTOGRÁFICO", 105, 20, {align:"center"});
-            let y = 30;
-            for(const v of photos) {
-                if(y > 250) { doc.addPage(); y=20; }
-                doc.setFontSize(10); doc.text(`${v.placa} (${v.modelo})`, 14, y);
-                y+=5;
-                // Renderiza 1 foto por veículo pra economizar espaço ou loop
-                if(v.fotos[0]) await this.drawSmartLogo(doc, v.fotos[0], 14, y, 60, 45);
-                y+=55;
-            }
-        }
-
-        doc.save(`Relatorio_${type}.pdf`);
-        document.getElementById('report-modal').style.display = 'none';
     },
 
-    // --- SALVAR VEÍCULO (COM OFICINA) ---
+    // --- SALVAR VEÍCULO (ATUALIZADO COM O CICLO) ---
     async saveVehicle(e) {
         e.preventDefault();
         let id = document.getElementById('veh-id').value || Date.now();
@@ -283,13 +76,25 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         const status = document.getElementById('f-status').value;
         const workshopName = status === 'Manutenção' ? document.getElementById('f-oficina').value : '';
 
-        // Se mudou para manutenção sem escolher oficina
         if(status === 'Manutenção' && !workshopName) return alert("Selecione a oficina!");
 
         const newDate = document.getElementById('f-manu-ultima').value;
         const newDesc = document.getElementById('f-pecas').value;
 
-        if (newDate && newDesc) hist.push({ date: newDate, desc: newDesc, km: document.getElementById('f-km').value, recordedAt: new Date().toISOString() });
+        // Se tiver nova manutenção, salva COM AS FOTOS NO HISTÓRICO
+        if (newDate && newDesc) {
+            hist.push({ 
+                date: newDate, 
+                desc: newDesc, 
+                km: document.getElementById('f-km').value, 
+                recordedAt: new Date().toISOString(),
+                // AQUI: Salva as fotos dentro do histórico para o relatório pegar depois
+                photos: [...this.tempPhotos] 
+            });
+        }
+
+        // RODAR A LIMPEZA (Apaga fotos > 60 dias)
+        hist = this.cleanupHistory(hist);
 
         const veh = {
             id: parseInt(id),
@@ -298,7 +103,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             placa: document.getElementById('f-placa').value.toUpperCase(),
             modelo: document.getElementById('f-modelo').value,
             status: status,
-            workshopName: workshopName, // SALVA A OFICINA
+            workshopName: workshopName,
             km: document.getElementById('f-km').value,
             manutencao: {
                 ultima: newDate,
@@ -306,9 +111,10 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
                 pecas: newDesc,
                 pendencias: document.getElementById('f-pendencias').value
             },
-            maintenanceHistory: hist,
+            maintenanceHistory: hist, // Salva o histórico já limpo
             observacoes: document.getElementById('f-obs').value,
-            fotos: this.tempPhotos,
+            // As fotos 'atuais' (tempPhotos) ficam apenas para visualização rápida no card
+            fotos: this.tempPhotos, 
             updatedAt: new Date().toISOString()
         };
 
@@ -321,12 +127,126 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         if(navigator.onLine) this.syncNow(true);
     },
 
-    // ... (Mantenha as funções padrão: selectLocation, renderSectorButtons, addSector, checkLogin, initApp, mergeData, loadFromLocal, updateLocalBackup, renderList, openNewVehicle, editVehicle, openStock, renderStockList, createStockItem, viewStockHistory, addStockMovement, saveStockItem, openChecklist, closeChecklist, renderChecklistForm, setupSignaturePad, getPos, clearSignature, generateChecklistPDF, closeModal, filterList, syncSingleTower, syncNow, handleImagePreview, resizeImage, renderImagePreviews, removePhoto, drawSmartLogo, fmtDate)
+    // --- RELATÓRIO (ATUALIZADO PARA PEGAR FOTOS DO HISTÓRICO) ---
+    async generatePeriodReport() {
+        const type = document.getElementById('rep-type').value;
+        const start = document.getElementById('rep-start').value;
+        const end = document.getElementById('rep-end').value;
+        
+        if(!start || !end) return alert("Selecione as datas");
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        let allVehicles = [];
+        if (type === 'global') {
+            for (const sec of this.sectors) {
+                const snap = await this.db.collection(`frota_${sec}`).get();
+                snap.forEach(doc => allVehicles.push(doc.data()));
+            }
+        } else {
+            allVehicles = this.vehicles;
+        }
+
+        // CAPA
+        if(LOGO_BASE64) await this.drawSmartLogo(doc, LOGO_BASE64, 55, 60, 100, 60);
+        doc.setFontSize(22); doc.text("RELATÓRIO DE GESTÃO DE FROTA", 105, 140, {align:"center"});
+        doc.setFontSize(14); doc.text(type === 'global' ? "Relatório Geral (Todas Secretarias)" : `Setor: ${this.currentLocation}`, 105, 155, {align:"center"});
+        doc.setFontSize(12); doc.text(`${this.fmtDate(start)} a ${this.fmtDate(end)}`, 105, 165, {align:"center"});
+        
+        doc.addPage();
+        let body = [];
+        // Lista para armazenar fotos vinculadas a uma manutenção específica
+        let maintenancePhotos = []; 
+        const dStart = new Date(start); const dEnd = new Date(end);
+
+        allVehicles.forEach(v => {
+            if(v.maintenanceHistory) {
+                v.maintenanceHistory.forEach(log => {
+                    const d = new Date(log.date);
+                    if(d >= dStart && d <= dEnd) {
+                        body.push([this.fmtDate(log.date), v.placa, v.modelo, log.desc, v.workshopName || '-']);
+                        
+                        // Se esse registro histórico tiver fotos (e não tiverem sido apagadas pelo ciclo de 60 dias)
+                        if(log.photos && log.photos.length > 0) {
+                            maintenancePhotos.push({
+                                placa: v.placa,
+                                modelo: v.modelo,
+                                date: log.date,
+                                images: log.photos
+                            });
+                        }
+                    }
+                });
+            }
+        });
+
+        if(body.length===0) return alert("Nada encontrado.");
+
+        doc.autoTable({
+            startY: 20, head: [['Data', 'Placa', 'Modelo', 'Serviço', 'Oficina']], body: body, theme:'grid'
+        });
+
+        // FOTOS (VINCULADAS À DATA)
+        if(maintenancePhotos.length > 0) {
+            doc.addPage();
+            doc.text("REGISTROS FOTOGRÁFICOS DO PERÍODO", 105, 20, {align:"center"});
+            let y = 30;
+            
+            for(const item of maintenancePhotos) {
+                if(y > 250) { doc.addPage(); y=20; }
+                
+                doc.setFillColor(230,230,230);
+                doc.rect(14, y-5, 182, 8, 'F');
+                doc.setFontSize(10); 
+                doc.text(`${item.placa} - ${this.fmtDate(item.date)}`, 16, y);
+                y += 10;
+
+                // Loop das fotos deste registro
+                let xPos = 15;
+                for (let i = 0; i < item.images.length; i++) {
+                    if(y > 260) { doc.addPage(); y = 20; }
+                    await this.drawSmartLogo(doc, item.images[i], xPos, y, 50, 40);
+                    xPos += 60; // Move para o lado
+                    
+                    // Quebra linha a cada 3 fotos
+                    if(xPos > 180) {
+                        xPos = 15;
+                        y += 45;
+                    }
+                }
+                y += 50; // Espaço para o próximo veículo
+            }
+        }
+
+        doc.save(`Relatorio_${type}.pdf`);
+        document.getElementById('report-modal').style.display = 'none';
+    },
+
+    // --- FUNÇÕES DE APOIO (MANTIDAS IGUAIS) ---
+    // Copie e cole aqui o RESTANTE das funções do código anterior:
+    // init(), loadWorkshops(), addWorkshop(), openWorkshops(), renderWorkshopsList(), deleteWorkshop(),
+    // toggleWorkshopSelect(), openDashboard(), renderSectorButtons(), addSector(), checkLogin(), 
+    // selectLocation(), switchLocation(), mergeData(), loadFromLocal(), updateLocalBackup(), 
+    // openNewVehicle(), editVehicle(), renderList(), openReportModal(), drawSmartLogo(), fmtDate(), 
+    // resizeImage(), handleImagePreview(), renderImagePreviews(), removePhoto(), closeModal(), 
+    // filterList(), syncSingleTower(), syncNow(), openStock(), renderStockList(), createStockItem(), 
+    // viewStockHistory(), addStockMovement(), saveStockItem(), openChecklist(), closeChecklist(), 
+    // renderChecklistForm(), setupSignaturePad(), getPos(), clearSignature(), generateChecklistPDF()
     
-    // ATENÇÃO: COPIE AS FUNÇÕES AUXILIARES DO CÓDIGO ANTERIOR PARA COMPLETAR ESTE BLOCO.
-    // Elas não mudaram, mas são necessárias para o código rodar.
+    // ... (Essas funções são idênticas ao código anterior, não precisam mudar)
     
-    renderSectorButtons() { /* Código anterior */ const list=document.getElementById('sector-list'); const nav=document.getElementById('nav-sector'); if(!list)return; list.innerHTML=''; nav.innerHTML='<option value="" disabled selected>Setor</option>'; this.sectors.forEach(sec=>{ const btn=document.createElement('button'); btn.className='btn-location'; btn.innerHTML=`<span class="material-icons" style="font-size:30px; margin-bottom:5px;">business</span>${sec}`; btn.onclick=()=>this.selectLocation(sec); list.appendChild(btn); const opt=document.createElement('option'); opt.value=sec; opt.innerText=sec; nav.appendChild(opt); }); },
+    // VOU COLOCAR AS ESSENCIAIS ABAIXO PARA VOCÊ COPIAR E COLAR SE PRECISAR:
+    
+    async init() { try { if (!firebase.apps.length) firebase.initializeApp(this.firebaseConfig); this.db = firebase.firestore(); this.dbLocal = await idb.openDB('gestao-frota-v2', 1, { upgrade(db) { if (!db.objectStoreNames.contains('vehicles')) db.createObjectStore('vehicles', { keyPath: 'id' }); if (!db.objectStoreNames.contains('stock')) db.createObjectStore('stock', { keyPath: 'id' }); }, }); await this.loadWorkshops(); await this.loadFromLocal(); this.db.collection(this.collectionName).onSnapshot(async (snap) => { document.getElementById('loading-msg').style.display = 'none'; let data = []; snap.forEach(doc => { let d = doc.data(); d._collection = this.collectionName; data.push(d); }); await this.mergeData(data); }); this.db.collection(`estoque_${this.currentLocation}`).onSnapshot(async (snap) => { let data = []; snap.forEach(doc => data.push(doc.data())); this.stock = data; const tx = this.dbLocal.transaction('stock', 'readwrite'); await tx.store.clear(); for(const s of data) await tx.store.put(s); await tx.done; }); } catch (e) { console.error(e); } if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js'); },
+    async loadWorkshops() { const snap = await this.db.collection('config_workshops').get(); this.workshops = []; snap.forEach(doc => this.workshops.push(doc.data())); this.renderWorkshopsList(); },
+    async addWorkshop() { const name = document.getElementById('new-workshop-name').value.trim(); if(!name) return; const ws = { id: Date.now().toString(), name: name }; await this.db.collection('config_workshops').doc(ws.id).set(ws); this.workshops.push(ws); document.getElementById('new-workshop-name').value = ''; this.renderWorkshopsList(); },
+    openWorkshops() { document.getElementById('workshops-modal').style.display = 'flex'; this.renderWorkshopsList(); },
+    renderWorkshopsList() { const c = document.getElementById('workshops-list'); const select = document.getElementById('f-oficina'); if(c) { c.innerHTML = ''; this.workshops.forEach(ws => { const div = document.createElement('div'); div.style = "padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;"; div.innerHTML = `<span>${ws.name}</span><button onclick="app.deleteWorkshop('${ws.id}')" style="color:red;border:none;background:none;">X</button>`; c.appendChild(div); }); } if(select) { select.innerHTML = '<option value="">Selecione a Oficina...</option>'; this.workshops.forEach(ws => { const opt = document.createElement('option'); opt.value = ws.name; opt.innerText = ws.name; select.appendChild(opt); }); } },
+    async deleteWorkshop(id) { if(!confirm("Apagar?")) return; await this.db.collection('config_workshops').doc(id).delete(); this.workshops = this.workshops.filter(w => w.id !== id); this.renderWorkshopsList(); },
+    toggleWorkshopSelect() { const status = document.getElementById('f-status').value; const div = document.getElementById('div-oficina'); if(status === 'Manutenção') div.style.display = 'block'; else div.style.display = 'none'; },
+    async openDashboard() { document.getElementById('dashboard-modal').style.display = 'flex'; const list = document.getElementById('dashboard-workshops-list'); list.innerHTML = '<p>Carregando...</p>'; let totalCars = 0; let maintenanceCars = 0; let carsByWorkshop = {}; for (const sec of this.sectors) { const snap = await this.db.collection(`frota_${sec}`).get(); snap.forEach(doc => { const car = doc.data(); totalCars++; if(car.status === 'Manutenção') { maintenanceCars++; const oficina = car.workshopName || 'Não Informada'; if(!carsByWorkshop[oficina]) carsByWorkshop[oficina] = []; carsByWorkshop[oficina].push({ ...car, sector: sec }); } }); } document.getElementById('dash-total').innerText = totalCars; document.getElementById('dash-maintenance').innerText = maintenanceCars; list.innerHTML = ''; if(maintenanceCars === 0) { list.innerHTML = '<p style="text-align:center;color:green;">Nenhum veículo em manutenção!</p>'; return; } for (const [oficina, cars] of Object.entries(carsByWorkshop)) { const group = document.createElement('div'); group.className = 'workshop-group'; let html = `<div class="workshop-header">🏢 ${oficina} (${cars.length})</div>`; cars.forEach(c => { html += `<div class="workshop-item"><div><strong>${c.placa}</strong> - ${c.modelo}</div><div style="font-size:0.8rem; background:#0056b3; color:white; padding:2px 6px; border-radius:4px;">${c.sector}</div></div>`; }); group.innerHTML = html; list.appendChild(group); } },
+    renderSectorButtons() { const list=document.getElementById('sector-list'); const nav=document.getElementById('nav-sector'); if(!list)return; list.innerHTML=''; nav.innerHTML='<option value="" disabled selected>Setor</option>'; this.sectors.forEach(sec=>{ const btn=document.createElement('button'); btn.className='btn-location'; btn.innerHTML=`<span class="material-icons" style="font-size:30px; margin-bottom:5px;">business</span>${sec}`; btn.onclick=()=>this.selectLocation(sec); list.appendChild(btn); const opt=document.createElement('option'); opt.value=sec; opt.innerText=sec; nav.appendChild(opt); }); },
     addSector() { const n=document.getElementById('new-sector-name').value.toUpperCase().trim(); if(!n)return; if(this.sectors.includes(n))return; this.sectors.push(n); localStorage.setItem('sectors',JSON.stringify(this.sectors)); this.renderSectorButtons(); document.getElementById('new-sector-name').value=''; },
     checkLogin() { const u=document.getElementById('login-user').value; const p=document.getElementById('login-pass').value; if(u===this.adminUser && p===this.adminPass){ this.userRole='admin'; document.getElementById('login-screen').style.display='none'; document.getElementById('location-screen').style.display='flex'; this.renderSectorButtons(); if(LOGO_BASE64) {const h=document.getElementById('header-logo'); if(h){h.src=LOGO_BASE64;h.style.display='block';}} } else { alert("Erro"); } },
     selectLocation(loc) { this.switchLocation(loc); document.getElementById('location-screen').style.display='none'; document.getElementById('app-content').style.display='block'; },
