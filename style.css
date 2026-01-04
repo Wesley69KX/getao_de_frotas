@@ -170,3 +170,18 @@ canvas { width: 100%; height: 100%; display: block; }
 .sync-success-icon { font-size: 50px; color: var(--success); margin-bottom: 20px; display: none; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+/* --- DASHBOARD & GRÁFICOS --- */
+.dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+.dash-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+.dash-number { font-size: 2rem; font-weight: bold; color: var(--primary); }
+.dash-label { font-size: 0.8rem; color: #666; text-transform: uppercase; }
+
+/* Lista de Oficinas no Dashboard */
+.workshop-group { margin-bottom: 15px; border: 1px solid #eee; border-radius: 8px; overflow: hidden; }
+.workshop-header { background: #e9ecef; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; }
+.workshop-item { padding: 10px; background: white; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; font-size: 0.9rem; }
+.workshop-item:last-child { border-bottom: none; }
+
+/* Centralização da Logo no Login */
+.login-logo-container { display: flex; justify-content: center; margin-bottom: 20px; }
+.login-logo-img { width: 140px; height: auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
