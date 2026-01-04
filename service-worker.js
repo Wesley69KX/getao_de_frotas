@@ -1,4 +1,4 @@
-const CACHE_NAME = 'frota-offline-page-v3'; // Mudei a versão para forçar atualização
+const CACHE_NAME = 'frota-offline-page-v4'; // Mudei a versão para forçar atualização
 const OFFLINE_URL = './offline.html';
 
 // 1. Instalação: Guarda APENAS a tela de offline no cache
