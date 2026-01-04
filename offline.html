@@ -3,18 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline</title>
+    <title>Sem Conexão</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f4f6f8; text-align: center; color: #333; margin: 0; }
-        h1 { color: #dc3545; margin-bottom: 10px; }
-        p { color: #666; margin-bottom: 30px; }
-        button { background: #0056b3; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 90%;
+            width: 300px;
+        }
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 22px;
+            margin-bottom: 10px;
+            color: #dc3545;
+        }
+        p {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        button {
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
 <body>
-    <h1 style="font-size: 50px;">📡🚫</h1>
-    <h1>Sistema Offline</h1>
-    <p>Você precisa de internet para acessar o sistema de frota.</p>
-    <button onclick="window.location.reload()">Tentar Conectar</button>
+    <div class="container">
+        <div class="icon">📡🚫</div>
+        <h1>Você está Offline</h1>
+        <p>O sistema de Gestão de Frota requer internet para sincronizar os dados com segurança.</p>
+        <button onclick="window.location.href = './index.html'">Tentar Conectar</button>
+    </div>
 </body>
 </html>
