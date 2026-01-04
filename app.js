@@ -25,8 +25,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
 
     },
 
-// --- DADOS DO CHECKLIST ---
-    checklistItemsData: [
+checklistItemsData: [
         {id: "1", text: "Nível de Óleo / Água"},
         {id: "2", text: "Freios e Fluídos"},
         {id: "3", text: "Pneus (Calibragem/Estado)"},
@@ -37,10 +36,9 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
     ],
 
     // =================================================================
-    // 1. INICIALIZAÇÃO E LOGIN
+    // 1. INICIALIZAÇÃO
     // =================================================================
     async initApp() {
-        // Aplica Logo
         if(LOGO_BASE64 && LOGO_BASE64.length > 50) {
             const els = ['app-logo', 'header-logo'];
             els.forEach(id => { 
@@ -48,16 +46,12 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
                 if(el) { el.src = LOGO_BASE64; el.style.display = 'block'; }
             });
         }
-
-        // Carrega Setores
-        const savedSectors = localStorage.getItem('sectors');
-        if(savedSectors) {
-            this.sectors = JSON.parse(savedSectors);
-        } else {
-            this.sectors = ['OBRAS', 'ADM']; 
-            localStorage.setItem('sectors', JSON.stringify(this.sectors));
-        }
-        this.renderSectorButtons();
+        
+        // Inicializa Firebase primeiro para carregar setores do Banco
+        if (!firebase.apps.length) firebase.initializeApp(this.firebaseConfig);
+        this.db = firebase.firestore();
+        
+        await this.loadSectors(); // AGORA CARREGA DO BANCO DE DADOS
     },
 
     checkLogin() {
@@ -68,12 +62,54 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('location-screen').style.display = 'flex';
             this.renderSectorButtons();
-            // Reforça a logo no header
             if(LOGO_BASE64) {
                 const h = document.getElementById('header-logo');
                 if(h) { h.src = LOGO_BASE64; h.style.display='block'; }
             }
         } else { alert("Dados incorretos"); }
+    },
+
+    // =================================================================
+    // 2. GESTÃO DE SETORES (CORRIGIDO PARA SALVAR NO BANCO)
+    // =================================================================
+    async loadSectors() {
+        try {
+            const snap = await this.db.collection('config_sectors').get();
+            if (snap.empty) {
+                // Se for a primeira vez, cria os padrões
+                const defaults = ['OBRAS', 'ADM', 'SAUDE', 'EDUCACAO'];
+                for(const sec of defaults) {
+                    await this.db.collection('config_sectors').doc(sec).set({name: sec});
+                }
+                this.sectors = defaults;
+            } else {
+                this.sectors = [];
+                snap.forEach(doc => this.sectors.push(doc.data().name));
+            }
+            this.renderSectorButtons();
+        } catch (e) {
+            console.error("Erro ao carregar setores:", e);
+            // Fallback se estiver offline na primeira vez
+            this.sectors = ['OBRAS', 'ADM'];
+            this.renderSectorButtons();
+        }
+    },
+
+    async addSector() {
+        const name = document.getElementById('new-sector-name').value.toUpperCase().trim();
+        if(!name) return alert("Digite o nome");
+        if(this.sectors.includes(name)) return alert("Já existe");
+
+        // SALVA NO FIREBASE AGORA
+        try {
+            await this.db.collection('config_sectors').doc(name).set({name: name});
+            this.sectors.push(name);
+            this.renderSectorButtons();
+            document.getElementById('new-sector-name').value = '';
+            alert(`Setor ${name} criado com sucesso!`);
+        } catch (e) {
+            alert("Erro ao salvar setor. Verifique a conexão.");
+        }
     },
 
     renderSectorButtons() {
@@ -98,16 +134,6 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         });
     },
 
-    addSector() {
-        const name = document.getElementById('new-sector-name').value.toUpperCase().trim();
-        if(!name) return alert("Digite o nome");
-        if(this.sectors.includes(name)) return alert("Já existe");
-        this.sectors.push(name);
-        localStorage.setItem('sectors', JSON.stringify(this.sectors));
-        this.renderSectorButtons();
-        document.getElementById('new-sector-name').value = '';
-    },
-
     selectLocation(loc) {
         this.switchLocation(loc);
         document.getElementById('location-screen').style.display = 'none';
@@ -120,17 +146,15 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         document.getElementById('nav-sector').value = loc;
         document.getElementById('loading-msg').style.display = 'block';
         document.getElementById('vehicle-list').innerHTML = '';
-        this.init(); 
+        this.initDatabaseListeners(); 
     },
 
     // =================================================================
-    // 2. BANCO DE DADOS
+    // 3. BANCO DE DADOS E LISTENERS
     // =================================================================
-    async init() {
+    async initDatabaseListeners() {
         try {
-            if (!firebase.apps.length) firebase.initializeApp(this.firebaseConfig);
-            this.db = firebase.firestore();
-            
+            // Banco Local (IndexedDB)
             this.dbLocal = await idb.openDB('gestao-frota-v2', 1, {
                 upgrade(db) {
                     if (!db.objectStoreNames.contains('vehicles')) db.createObjectStore('vehicles', { keyPath: 'id' });
@@ -161,6 +185,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             });
 
         } catch (e) { console.error(e); this.loadFromLocal(); }
+        
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
     },
 
@@ -201,13 +226,12 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
     },
 
     // =================================================================
-    // 3. GESTÃO DE VEÍCULOS
+    // 4. CRUD VEÍCULOS (COM CORREÇÃO DA FOTO)
     // =================================================================
     renderList(list = this.vehicles) {
         const c = document.getElementById('vehicle-list'); c.innerHTML = '';
         if(!list.length) { c.innerHTML = '<p style="text-align:center;color:#777;padding:20px;">Nenhum veículo.</p>'; return; }
         
-        // ORDENAÇÃO: Manutenção no topo
         list.sort((a,b) => {
             if (a.status === 'Manutenção' && b.status !== 'Manutenção') return -1;
             if (a.status !== 'Manutenção' && b.status === 'Manutenção') return 1;
@@ -239,26 +263,17 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         document.getElementById('total-card').innerText = list.length;
     },
 
-    // Formatar Placa
     formatPlate(input) {
         let v = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
         if (v.length > 3 && v.length <= 7) {
-            if(!isNaN(v[3])) v = v.slice(0,3) + '-' + v.slice(3); // Padrão antigo
+            if(!isNaN(v[3])) v = v.slice(0,3) + '-' + v.slice(3);
         }
         input.value = v;
     },
 
-    openNewVehicle() {
-        this.openVehicleModal(null, false);
-    },
-
-    viewVehicle(id) {
-        this.openVehicleModal(id, true); // Modo Leitura
-    },
-
-    editVehicle(id) {
-        this.openVehicleModal(id, false); // Modo Edição
-    },
+    viewVehicle(id) { this.openVehicleModal(id, true); },
+    editVehicle(id) { this.openVehicleModal(id, false); },
+    openNewVehicle() { this.openVehicleModal(null, false); },
 
     openVehicleModal(id, readOnly) {
         this.tempPhotos = [];
@@ -285,17 +300,15 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         this.toggleWorkshopSelect();
         this.renderImagePreviews(readOnly);
 
-        // Bloqueio de campos para modo visualização
         const inputs = document.querySelectorAll('#vehicle-form input, #vehicle-form select, #vehicle-form textarea');
         inputs.forEach(el => el.disabled = readOnly);
-        
         document.getElementById('photo-buttons').style.display = readOnly ? 'none' : 'block';
         document.getElementById('btn-save-veh').style.display = readOnly ? 'none' : 'block';
         document.getElementById('view-only-msg').style.display = readOnly ? 'block' : 'none';
-        
         document.getElementById('modal').style.display = 'flex';
     },
 
+    // CORREÇÃO: Função para limpar fotos muito antigas, mas manter as recentes
     cleanupHistory(history) {
         if (!history || !Array.isArray(history)) return [];
         const NOW = new Date();
@@ -305,13 +318,14 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             const entryDate = new Date(entry.date + 'T12:00:00');
             const diffTime = Math.abs(NOW - entryDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays > LIMIT_DAYS && entry.photos && entry.photos.length > 0) {
+            if (diffDays > LIMIT_DAYS && entry.photos) {
                 delete entry.photos; 
             }
             return entry;
         });
     },
 
+    // CORREÇÃO CRÍTICA: SALVAR FOTOS NO HISTÓRICO CORRETO
     async saveVehicle(e) {
         e.preventDefault();
         let id = document.getElementById('veh-id').value || Date.now();
@@ -324,16 +338,30 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
 
         const newDate = document.getElementById('f-manu-ultima').value;
         const newDesc = document.getElementById('f-pecas').value;
+        const newKm = document.getElementById('f-km').value;
 
-        if (newDate && newDesc) {
-            hist.push({ 
-                date: newDate, 
-                desc: newDesc, 
-                km: document.getElementById('f-km').value, 
-                recordedAt: new Date().toISOString(),
-                photos: [...this.tempPhotos]
-            });
+        // LÓGICA DE CORREÇÃO DE FOTO:
+        // Se já existe uma entrada no histórico com essa mesma data, ATUALIZA ELA (incluindo as fotos novas)
+        if (newDate) {
+            const existingEntryIndex = hist.findIndex(h => h.date === newDate);
+            
+            if (existingEntryIndex > -1) {
+                // ATUALIZA REGISTRO EXISTENTE
+                hist[existingEntryIndex].desc = newDesc || hist[existingEntryIndex].desc;
+                hist[existingEntryIndex].km = newKm;
+                hist[existingEntryIndex].photos = [...this.tempPhotos]; // Atualiza fotos
+            } else if (newDesc) {
+                // CRIA NOVO REGISTRO
+                hist.push({ 
+                    date: newDate, 
+                    desc: newDesc, 
+                    km: newKm, 
+                    recordedAt: new Date().toISOString(),
+                    photos: [...this.tempPhotos]
+                });
+            }
         }
+
         hist = this.cleanupHistory(hist);
 
         const veh = {
@@ -344,7 +372,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             modelo: document.getElementById('f-modelo').value,
             status: status,
             workshopName: workshopName,
-            km: document.getElementById('f-km').value,
+            km: newKm,
             manutencao: {
                 ultima: newDate,
                 proxima: document.getElementById('f-manu-proxima').value,
@@ -367,7 +395,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
     },
 
     // =================================================================
-    // 4. GESTÃO DE OFICINAS
+    // 5. OFICINAS, DASHBOARD & RELATÓRIOS
     // =================================================================
     async loadWorkshops() {
         const snap = await this.db.collection('config_workshops').get();
@@ -422,9 +450,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         div.style.display = (status === 'Manutenção') ? 'block' : 'none';
     },
 
-    // =================================================================
-    // 5. DASHBOARD & RELATÓRIO DO DASH
-    // =================================================================
+    // DASHBOARD
     async openDashboard() {
         document.getElementById('dashboard-modal').style.display = 'flex';
         const list = document.getElementById('dashboard-workshops-list');
@@ -472,7 +498,6 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // Cabeçalho
         doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 30, 'F');
         doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont("helvetica", "bold");
         doc.text("STATUS ATUAL DA FROTA", 105, 18, {align:"center"});
@@ -515,38 +540,31 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         doc.save("Dashboard_Snapshot.pdf");
     },
 
-    // =================================================================
-    // 6. RELATÓRIOS (GERAL E SETORIAL)
-    // =================================================================
+    // RELATÓRIOS PERIÓDICOS
     openReportModal() { document.getElementById('report-modal').style.display = 'flex'; },
 
     async generatePeriodReport() {
         const type = document.getElementById('rep-type').value;
         const start = document.getElementById('rep-start').value;
         const end = document.getElementById('rep-end').value;
-        
         if(!start || !end) return alert("Selecione as datas");
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // Capa
+        // CAPA
         doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 40, 'F'); 
         doc.setTextColor(255, 255, 255); doc.setFontSize(22); doc.setFont("helvetica", "bold");
         doc.text("RELATÓRIO DE GESTÃO DE FROTA", 105, 25, {align:"center"});
-
-        if(LOGO_BASE64 && LOGO_BASE64.length > 50) {
-            await this.drawSmartLogo(doc, LOGO_BASE64, 'center', 60, 80, 50);
-        }
+        if(LOGO_BASE64 && LOGO_BASE64.length > 50) await this.drawSmartLogo(doc, LOGO_BASE64, 'center', 60, 80, 50);
 
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(16); doc.setFont("helvetica", "bold");
-        doc.text(type === 'global' ? "Relatório Geral Unificado" : `Secretaria: ${this.currentLocation}`, 105, 150, {align:"center"});
-        doc.setFontSize(12); doc.setFont("helvetica", "normal");
-        doc.text("Período:", 105, 165, {align:"center"});
-        doc.setFontSize(14); doc.text(`${this.fmtDate(start)}  até  ${this.fmtDate(end)}`, 105, 175, {align:"center"});
+        doc.text(type === 'global' ? "Relatório Geral Unificado" : `Setor: ${this.currentLocation}`, 105, 150, {align:"center"});
+        doc.setFontSize(14); doc.setFont("helvetica", "normal");
+        doc.text(`${this.fmtDate(start)}  até  ${this.fmtDate(end)}`, 105, 165, {align:"center"});
 
-        // Dados
+        // DADOS
         let allVehicles = [];
         if (type === 'global') {
             for (const sec of this.sectors) {
@@ -578,17 +596,13 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         if(body.length === 0) return alert("Nada encontrado.");
 
         doc.addPage();
-        doc.autoTable({
-            startY: 20, head: [['Data', 'Placa', 'Modelo', 'Serviço', 'Oficina']], 
-            body: body, theme:'striped', headStyles: { fillColor: [0, 86, 179] }
-        });
+        doc.autoTable({ startY: 20, head: [['Data', 'Placa', 'Modelo', 'Serviço', 'Oficina']], body: body, theme:'striped', headStyles: { fillColor: [0, 86, 179] } });
 
         if(photos.length > 0) {
             doc.addPage();
             doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 20, 'F');
             doc.setTextColor(255, 255, 255); doc.setFontSize(12); doc.setFont("helvetica", "bold");
             doc.text("REGISTROS FOTOGRÁFICOS", 105, 13, {align:"center"});
-            
             let y = 30;
             for(const item of photos) {
                 if(y > 240) { doc.addPage(); y=30; }
@@ -606,16 +620,14 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
                 if(xPos > 15) y += 55;
             }
         }
-
         doc.save(`Relatorio_${type}.pdf`);
         document.getElementById('report-modal').style.display = 'none';
     },
 
     // =================================================================
-    // 7. ESTOQUE & CHECKLIST
+    // 6. ESTOQUE & CHECKLIST
     // =================================================================
     openStock() { document.getElementById('stock-modal').style.display = 'flex'; this.renderStockList(); },
-
     renderStockList() {
         const c = document.getElementById('stock-list'); c.innerHTML = '';
         this.stock.forEach(i => {
@@ -625,7 +637,6 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
             c.appendChild(div);
         });
     },
-
     async createStockItem() {
         const n = document.getElementById('stock-new-name').value;
         const m = document.getElementById('stock-new-min').value;
@@ -634,7 +645,6 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         await this.saveStockItem(i);
         document.getElementById('stock-new-name').value = ''; this.renderStockList();
     },
-
     viewStockHistory(id) {
         this.currentStockId = id;
         const item = this.stock.find(x => x.id === id);
@@ -644,27 +654,23 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         b.innerHTML = '';
         (item.history || []).slice().reverse().forEach(log => {
             const row = document.createElement('tr');
-            // Correção da data
             const dateStr = log.date ? new Date(log.date).toLocaleDateString('pt-BR') : '-';
             row.innerHTML = `<td>${dateStr}</td><td>${log.type}</td><td>${log.qtd}</td><td>${log.user}</td>`;
             b.appendChild(row);
         });
     },
-
     async addStockMovement() {
         if(!this.currentStockId) return;
         const t = document.getElementById('hist-type').value;
         const q = parseInt(document.getElementById('hist-qtd').value);
         if(!q) return;
         const i = this.stock.find(x => x.id === this.currentStockId);
-        if(t === 'SAIDA') { if(i.qtd < q) return alert("Estoque Baixo"); i.qtd -= q; } else { i.qtd += q; }
+        if(t === 'SAIDA') { if(i.qtd < q) return alert("Baixo"); i.qtd -= q; } else { i.qtd += q; }
         if(!i.history) i.history = [];
         i.history.push({ date: new Date().toISOString(), type: t, qtd: q, user: this.adminUser });
         await this.saveStockItem(i);
-        document.getElementById('hist-qtd').value = '';
-        this.viewStockHistory(this.currentStockId); this.renderStockList();
+        document.getElementById('hist-qtd').value = ''; this.viewStockHistory(this.currentStockId); this.renderStockList();
     },
-
     async saveStockItem(i) {
         const x = this.stock.findIndex(z => z.id === i.id);
         if(x !== -1) this.stock[x] = i; else this.stock.push(i);
@@ -672,7 +678,6 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         await tx.store.put(i); await tx.done;
         if(navigator.onLine) this.db.collection(`estoque_${this.currentLocation}`).doc(i.id).set(i);
     },
-
     // Checklist
     openChecklist() { document.getElementById('checklist-screen').style.display='flex'; this.renderChecklistForm(); this.setupSignaturePad(); },
     closeChecklist() { document.getElementById('checklist-screen').style.display='none'; },
@@ -687,8 +692,7 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
     setupSignaturePad() {
         const cv = document.getElementById('signature-pad'); const ctx = cv.getContext('2d');
         const w = document.querySelector('.signature-pad-wrapper');
-        cv.width = w.offsetWidth; cv.height = w.offsetHeight; ctx.lineWidth = 2;
-        let d = false;
+        cv.width = w.offsetWidth; cv.height = w.offsetHeight; ctx.lineWidth = 2; let d = false;
         const start = (e) => { d=true; ctx.beginPath(); const p=this.getPos(e,cv); ctx.moveTo(p.x,p.y); };
         const move = (e) => { if(d){ const p=this.getPos(e,cv); ctx.lineTo(p.x,p.y); ctx.stroke(); } };
         const end = () => d=false;
@@ -704,71 +708,17 @@ apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
         doc.setFontSize(14); doc.text("CHECKLIST VEICULAR", 105, 50, {align:"center"});
         doc.save("Check.pdf");
     },
-
-    // =================================================================
-    // 8. UTILITÁRIOS
-    // =================================================================
+    // Util
     closeModal() { document.getElementById('modal').style.display = 'none'; },
     filterList() { const t = document.getElementById('search').value.toLowerCase(); this.renderList(this.vehicles.filter(v => v.placa.toLowerCase().includes(t))); },
     fmtDate(d) { if(!d) return '-'; return new Date(d+'T12:00:00').toLocaleDateString('pt-BR'); },
-    
-    async syncSingleTower(v) {
-        if(!navigator.onLine) return false;
-        try { const d = {...v}; delete d._syncStatus; await this.db.collection(this.collectionName).doc(String(v.id)).set(d); v._syncStatus = 'synced'; return true; } catch(e) { return false; }
-    },
-    async syncNow(s) {
-        if(!navigator.onLine) return;
-        const p = this.vehicles.filter(v => v._syncStatus === 'pending');
-        if(p.length===0) return;
-        if(!s) document.getElementById('sync-screen').style.display='flex';
-        for(const v of p) await this.syncSingleTower(v);
-        await this.updateLocalBackup(this.vehicles);
-        this.renderList();
-        if(!s) document.getElementById('sync-screen').style.display='none';
-    },
-
-    resizeImage(file, w, h, cb) { 
-        const r = new FileReader(); r.readAsDataURL(file); 
-        r.onload = (e) => { 
-            const i = new Image(); i.src = e.target.result; 
-            i.onload = () => { 
-                const c = document.createElement('canvas'); 
-                let wt = i.width; let ht = i.height;
-                if (wt > ht) { if (wt > w) { ht *= w / wt; wt = w; } } else { if (ht > h) { wt *= h / ht; ht = h; } }
-                c.width = wt; c.height = ht; 
-                c.getContext('2d').drawImage(i, 0, 0, wt, ht); 
-                cb(c.toDataURL('image/jpeg', 0.8)); 
-            }; 
-        }; 
-    },
+    async syncSingleTower(v) { if(!navigator.onLine) return false; try { const d = {...v}; delete d._syncStatus; await this.db.collection(this.collectionName).doc(String(v.id)).set(d); v._syncStatus = 'synced'; return true; } catch(e) { return false; } },
+    async syncNow(s) { if(!navigator.onLine) return; const p = this.vehicles.filter(v => v._syncStatus === 'pending'); if(p.length===0) return; if(!s) document.getElementById('sync-screen').style.display='flex'; for(const v of p) await this.syncSingleTower(v); await this.updateLocalBackup(this.vehicles); this.renderList(); if(!s) document.getElementById('sync-screen').style.display='none'; },
+    resizeImage(file, w, h, cb) { const r = new FileReader(); r.readAsDataURL(file); r.onload = (e) => { const i = new Image(); i.src = e.target.result; i.onload = () => { const c = document.createElement('canvas'); let wt = i.width; let ht = i.height; if (wt > ht) { if (wt > w) { ht *= w / wt; wt = w; } } else { if (ht > h) { wt *= h / ht; ht = h; } } c.width = wt; c.height = ht; c.getContext('2d').drawImage(i, 0, 0, wt, ht); cb(c.toDataURL('image/jpeg', 0.8)); }; }; },
     handleImagePreview(e) { Array.from(e.target.files).forEach(f => this.resizeImage(f, 1200, 1200, b => { this.tempPhotos.push(b); this.renderImagePreviews(false); })); },
-    renderImagePreviews(readOnly) { 
-        const c = document.getElementById('image-preview-container'); c.innerHTML = ''; 
-        this.tempPhotos.forEach((s, i) => { 
-            const d = document.createElement('div'); d.className='photo-wrapper'; 
-            let html = `<img src="${s}" class="img-preview" onclick="window.open('${s}')">`;
-            if(!readOnly) html += `<div class="btn-delete-photo" onclick="app.removePhoto(${i})">&times;</div>`;
-            d.innerHTML = html;
-            c.appendChild(d); 
-        }); 
-    },
+    renderImagePreviews(readOnly) { const c = document.getElementById('image-preview-container'); c.innerHTML = ''; this.tempPhotos.forEach((s, i) => { const d = document.createElement('div'); d.className='photo-wrapper'; let html = `<img src="${s}" class="img-preview" onclick="window.open('${s}')">`; if(!readOnly) html += `<div class="btn-delete-photo" onclick="app.removePhoto(${i})">&times;</div>`; d.innerHTML = html; c.appendChild(d); }); },
     removePhoto(i) { this.tempPhotos.splice(i, 1); this.renderImagePreviews(false); },
-    
-    async drawSmartLogo(doc, b64, x, y, maxW, maxH) {
-        return new Promise(r => { 
-            const i = new Image(); i.src = b64; 
-            i.onload = () => { 
-                const ratio = i.width / i.height;
-                let fw = maxW; let fh = fw / ratio;
-                if(fh > maxH) { fh = maxH; fw = fh * ratio; }
-                let fx = x === 'center' ? (210 - fw) / 2 : x + (maxW - fw) / 2;
-                try { doc.addImage(b64, 'PNG', fx, y + (maxH - fh) / 2, fw, fh); } catch(e){}
-                r(); 
-            }; i.onerror = r; 
-        });
-    }
+    async drawSmartLogo(doc, b64, x, y, maxW, maxH) { return new Promise(r => { const i = new Image(); i.src = b64; i.onload = () => { const ratio = i.width / i.height; let fw = maxW; let fh = fw / ratio; if(fh > maxH) { fh = maxH; fw = fh * ratio; } let fx = x === 'center' ? (210 - fw) / 2 : x + (maxW - fw) / 2; try { doc.addImage(b64, 'PNG', fx, y + (maxH - fh) / 2, fw, fh); } catch(e){} r(); }; i.onerror = r; }); }
 };
-
-window.onload = () => app.initApp();
 
 window.onload = () => app.initApp();
