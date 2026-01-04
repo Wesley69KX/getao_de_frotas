@@ -21,15 +21,15 @@ const app = {
     // =================================================================
     // 2. CONFIGURAÇÃO FIREBASE (Use a sua mesma config)
     // =================================================================
-    firebaseConfig: {
-        apiKey: "AIzaSyCvnPi_4kZdyMjsbcfiIeaM0Qid8qDDyyg",
-        authDomain: "gestao-torres-v2.firebaseapp.com",
-        projectId: "gestao-torres-v2",
-        storageBucket: "gestao-torres-v2.firebasestorage.app",
-        messagingSenderId: "728720990458",
-        appId: "1:728720990458:web:b48fc14eb41be2ad732943",
-        measurementId: "G-LJD922VTQ4"
-    },
+    firebaseConfig: { 
+        apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
+  authDomain: "gestao-de-veiculos-municipal.firebaseapp.com",
+  projectId: "gestao-de-veiculos-municipal",
+  storageBucket: "gestao-de-veiculos-municipal.firebasestorage.app",
+  messagingSenderId: "989679906816",
+  appId: "1:989679906816:web:70480b9283fbe2b5b8a8e5",
+  measurementId: "G-MNTBB5LB9Y"
+ },
 
     // --- ITENS DE MANUTENÇÃO VEICULAR ---
     checklistItemsData: [
