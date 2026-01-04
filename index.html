@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gestão de Frota Municipal</title>
+    <title>Gestão de Frota Gov</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0056b3">
@@ -26,10 +26,8 @@
             <div class="login-logo-container">
                 <img id="app-logo" src="" class="login-logo-img" style="display:none;">
             </div>
-            
             <h2>Gestão de Frota</h2>
             <p style="color: #888; margin-bottom:20px;">Acesso Administrativo</p>
-            
             <div class="input-group"><input type="text" id="login-user" placeholder="Usuário"></div>
             <div class="input-group" style="margin-top:10px;"><input type="password" id="login-pass" placeholder="Senha"></div>
             <br>
@@ -102,52 +100,11 @@
                         <div class="dash-label">Em Manutenção</div>
                     </div>
                 </div>
-
-                <h3>📍 Carros em Oficina (Tempo Real)</h3>
-                <div id="dashboard-workshops-list">
-                    </div>
+                <h3>📍 Carros em Oficina (Agora)</h3>
+                <div id="dashboard-workshops-list"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn-save" onclick="app.generateGlobalStatusPDF()">📄 Baixar Relatório Geral (Todos Setores)</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="workshops-modal" class="modal">
-        <div class="modal-content" style="max-width: 500px; height:auto;">
-            <div class="modal-header">
-                <h2>🔧 Gestão de Oficinas</h2>
-                <span class="close" onclick="document.getElementById('workshops-modal').style.display='none'">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <input type="text" id="new-workshop-name" placeholder="Nome da Oficina (Ex: Auto Center Zé)">
-                    <button class="btn-save" onclick="app.addWorkshop()" style="width:auto;">Add</button>
-                </div>
-                <div id="workshops-list" style="max-height:300px; overflow-y:auto;"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="report-modal" class="modal">
-        <div class="modal-content" style="max-width: 400px; height: auto;">
-            <div class="modal-header">
-                <h2>📅 Relatórios</h2>
-                <span class="close" onclick="document.getElementById('report-modal').style.display='none'">&times;</span>
-            </div>
-            <div class="modal-body">
-                <label>Tipo:</label>
-                <select id="rep-type" style="margin-bottom:15px;">
-                    <option value="sector">Apenas Setor Atual</option>
-                    <option value="global">🌍 GLOBAL (Todas Secretarias)</option>
-                </select>
-
-                <label>Início:</label><input type="date" id="rep-start" style="margin-bottom:15px;">
-                <label>Fim:</label><input type="date" id="rep-end">
-                
-                <div style="margin-top:20px; display:flex; gap:10px;">
-                    <button class="btn-save" onclick="app.generatePeriodReport()">Gerar PDF</button>
-                </div>
+                <button class="btn-save" onclick="app.generateDashboardPDF()">📄 Baixar Relatório do Painel (Snapshot)</button>
             </div>
         </div>
     </div>
@@ -160,10 +117,15 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="veh-id">
+                
+                <div id="view-only-msg" style="display:none; background:#e9ecef; color:#666; padding:10px; text-align:center; margin-bottom:15px; border-radius:5px; font-weight:bold;">
+                    👁️ Modo de Visualização (Somente Leitura)
+                </div>
+
                 <div class="form-section">
                     <h3>Dados</h3>
                     <div class="form-row">
-                        <div><label>Placa</label><input type="text" id="f-placa" required></div>
+                        <div><label>Placa</label><input type="text" id="f-placa" required oninput="app.formatPlate(this)" maxlength="8"></div>
                         <div><label>Modelo</label><input type="text" id="f-modelo" required></div>
                     </div>
                     <div class="form-row">
@@ -181,14 +143,14 @@
                         <label style="color:#856404; font-weight:bold;">Em qual oficina está?</label>
                         <select id="f-oficina">
                             <option value="">Selecione a Oficina...</option>
-                            </select>
+                        </select>
                     </div>
                 </div>
 
                 <div class="form-section">
                     <h3>Manutenção</h3>
                     <div class="two-col">
-                        <div><label>Data</label><input type="date" id="f-manu-ultima"></div>
+                        <div><label>Data Serviço</label><input type="date" id="f-manu-ultima"></div>
                         <div><label>Próx. Km</label><input type="text" id="f-manu-proxima"></div>
                     </div>
                     <label>Serviço Realizado</label><textarea id="f-pecas" rows="2"></textarea>
@@ -198,22 +160,31 @@
                 <div class="form-section">
                     <h3>Fotos & Obs</h3>
                     <textarea id="f-obs" rows="2"></textarea>
+                    
                     <div class="photo-area">
-                        <input type="file" id="image-input" multiple onchange="app.handleImagePreview(event)" style="display:none" accept="image/*">
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('image-input').click()">+ Fotos</button>
+                        <div id="photo-buttons">
+                            <input type="file" id="image-input" multiple onchange="app.handleImagePreview(event)" style="display:none" accept="image/*">
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('image-input').click()">+ Fotos</button>
+                        </div>
                         <div id="image-preview-container" class="image-preview-container"></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn-cancel" onclick="app.closeModal()">Cancelar</button>
-                <button type="submit" class="btn-save">Salvar</button>
+                <button type="button" class="btn-cancel" onclick="app.closeModal()">Fechar</button>
+                <button type="submit" id="btn-save-veh" class="btn-save">Salvar</button>
             </div>
         </form>
     </div>
 
+    <div id="workshops-modal" class="modal"><div class="modal-content" style="max-width: 500px;"><div class="modal-header"><h2>🔧 Oficinas</h2><span class="close" onclick="document.getElementById('workshops-modal').style.display='none'">&times;</span></div><div class="modal-body"><div style="display:flex; gap:10px; margin-bottom:20px;"><input type="text" id="new-workshop-name" placeholder="Nome da Oficina"><button class="btn-save" onclick="app.addWorkshop()" style="width:auto;">Add</button></div><div id="workshops-list" style="max-height:300px; overflow-y:auto;"></div></div></div></div>
+    
+    <div id="report-modal" class="modal"><div class="modal-content" style="max-width: 400px;"><div class="modal-header"><h2>📅 Relatórios</h2><span class="close" onclick="document.getElementById('report-modal').style.display='none'">&times;</span></div><div class="modal-body"><label>Tipo:</label><select id="rep-type" style="margin-bottom:15px;"><option value="sector">Apenas Setor Atual</option><option value="global">🌍 GLOBAL (Todas Secretarias)</option></select><label>Início:</label><input type="date" id="rep-start" style="margin-bottom:15px;"><label>Fim:</label><input type="date" id="rep-end"><div style="margin-top:20px; display:flex; gap:10px;"><button class="btn-save" onclick="app.generatePeriodReport()">Gerar PDF</button></div></div></div></div>
+    
     <div id="stock-modal" class="modal"><div class="modal-content"><div class="modal-header"><h2>📦 Estoque</h2><span class="close" onclick="document.getElementById('stock-modal').style.display='none'">&times;</span></div><div class="modal-body"><div style="background:#e9ecef; padding:10px; border-radius:8px; margin-bottom:15px; display:flex; gap:5px;"><input type="text" id="stock-new-name" placeholder="Peça" style="flex:2;margin:0;"><input type="number" id="stock-new-min" placeholder="Mín" style="flex:1;margin:0;"><button type="button" class="btn-save" onclick="app.createStockItem()" style="flex:1;margin:0;">Add</button></div><div id="stock-list" style="max-height:300px; overflow-y:auto;"></div><div id="stock-history-panel" style="display:none; border-top:2px solid #ddd; padding-top:15px; margin-top:15px;"><h4 id="hist-item-name"></h4><div style="display:flex; gap:5px; margin-bottom:10px;"><select id="hist-type" style="margin:0;"><option value="SAIDA">⬇️ SAÍDA</option><option value="ENTRADA">⬆️ ENTRADA</option></select><input type="number" id="hist-qtd" placeholder="Qtd" style="margin:0;"><button onclick="app.addStockMovement()" style="background:#333; color:white; border:none; padding:5px 15px; border-radius:5px;">OK</button></div><div id="hist-table-body"></div></div></div></div></div>
+    
     <div id="checklist-screen" class="checklist-overlay" style="display:none;"><div class="checklist-header"><button onclick="app.closeChecklist()" class="btn-back">Voltar</button><h2>Checklist</h2><button onclick="app.generateChecklistPDF()" class="btn-save-check">PDF</button></div><div class="checklist-content"><div class="check-section"><input type="text" id="chk-placa" placeholder="Placa"><div class="two-col"><input type="date" id="chk-data"><input type="number" id="chk-km" placeholder="Km"></div><input type="text" id="chk-resp" placeholder="Responsável"></div><div id="checklist-items-container"></div><div class="check-section"><div class="signature-pad-wrapper"><canvas id="signature-pad"></canvas></div><button type="button" class="btn-clear-sig" onclick="app.clearSignature()">Limpar</button></div><div style="height:60px;"></div></div></div>
+    
     <div id="sync-screen" class="sync-overlay"><div class="sync-content"><span id="sync-spinner" class="material-icons sync-spinner">autorenew</span><h3 id="sync-title">Sincronizando...</h3></div></div>
 
     <script src="app.js"></script>
