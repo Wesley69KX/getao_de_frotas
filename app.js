@@ -47,11 +47,10 @@ checklistItemsData: [
             });
         }
         
-        // Inicializa Firebase primeiro para carregar setores do Banco
         if (!firebase.apps.length) firebase.initializeApp(this.firebaseConfig);
         this.db = firebase.firestore();
         
-        await this.loadSectors(); // AGORA CARREGA DO BANCO DE DADOS
+        await this.loadSectors();
     },
 
     checkLogin() {
@@ -70,13 +69,12 @@ checklistItemsData: [
     },
 
     // =================================================================
-    // 2. GESTÃO DE SETORES (CORRIGIDO PARA SALVAR NO BANCO)
+    // 2. GESTÃO DE SETORES
     // =================================================================
     async loadSectors() {
         try {
             const snap = await this.db.collection('config_sectors').get();
             if (snap.empty) {
-                // Se for a primeira vez, cria os padrões
                 const defaults = ['OBRAS', 'ADM', 'SAUDE', 'EDUCACAO'];
                 for(const sec of defaults) {
                     await this.db.collection('config_sectors').doc(sec).set({name: sec});
@@ -89,7 +87,6 @@ checklistItemsData: [
             this.renderSectorButtons();
         } catch (e) {
             console.error("Erro ao carregar setores:", e);
-            // Fallback se estiver offline na primeira vez
             this.sectors = ['OBRAS', 'ADM'];
             this.renderSectorButtons();
         }
@@ -100,7 +97,6 @@ checklistItemsData: [
         if(!name) return alert("Digite o nome");
         if(this.sectors.includes(name)) return alert("Já existe");
 
-        // SALVA NO FIREBASE AGORA
         try {
             await this.db.collection('config_sectors').doc(name).set({name: name});
             this.sectors.push(name);
@@ -154,7 +150,6 @@ checklistItemsData: [
     // =================================================================
     async initDatabaseListeners() {
         try {
-            // Banco Local (IndexedDB)
             this.dbLocal = await idb.openDB('gestao-frota-v2', 1, {
                 upgrade(db) {
                     if (!db.objectStoreNames.contains('vehicles')) db.createObjectStore('vehicles', { keyPath: 'id' });
@@ -165,7 +160,6 @@ checklistItemsData: [
             await this.loadWorkshops();
             await this.loadFromLocal();
 
-            // Listener Veículos
             this.db.collection(this.collectionName).onSnapshot(async (snap) => {
                 document.getElementById('loading-msg').style.display = 'none';
                 let data = [];
@@ -173,7 +167,6 @@ checklistItemsData: [
                 await this.mergeData(data);
             });
             
-            // Listener Estoque
             this.db.collection(`estoque_${this.currentLocation}`).onSnapshot(async (snap) => {
                 let data = [];
                 snap.forEach(doc => data.push(doc.data()));
@@ -226,7 +219,7 @@ checklistItemsData: [
     },
 
     // =================================================================
-    // 4. CRUD VEÍCULOS (COM CORREÇÃO DA FOTO)
+    // 4. CRUD VEÍCULOS
     // =================================================================
     renderList(list = this.vehicles) {
         const c = document.getElementById('vehicle-list'); c.innerHTML = '';
@@ -308,7 +301,6 @@ checklistItemsData: [
         document.getElementById('modal').style.display = 'flex';
     },
 
-    // CORREÇÃO: Função para limpar fotos muito antigas, mas manter as recentes
     cleanupHistory(history) {
         if (!history || !Array.isArray(history)) return [];
         const NOW = new Date();
@@ -325,7 +317,6 @@ checklistItemsData: [
         });
     },
 
-    // CORREÇÃO CRÍTICA: SALVAR FOTOS NO HISTÓRICO CORRETO
     async saveVehicle(e) {
         e.preventDefault();
         let id = document.getElementById('veh-id').value || Date.now();
@@ -340,24 +331,19 @@ checklistItemsData: [
         const newDesc = document.getElementById('f-pecas').value;
         const newKm = document.getElementById('f-km').value;
 
-        // LÓGICA DE CORREÇÃO DE FOTO:
-        // Se já existe uma entrada no histórico com essa mesma data, ATUALIZA ELA (incluindo as fotos novas)
-        if (newDate) {
+        if (newDate && newDesc) {
             const existingEntryIndex = hist.findIndex(h => h.date === newDate);
-            
             if (existingEntryIndex > -1) {
-                // ATUALIZA REGISTRO EXISTENTE
                 hist[existingEntryIndex].desc = newDesc || hist[existingEntryIndex].desc;
                 hist[existingEntryIndex].km = newKm;
-                hist[existingEntryIndex].photos = [...this.tempPhotos]; // Atualiza fotos
+                // hist[existingEntryIndex].photos = [...this.tempPhotos]; // NÃO SALVA MAIS NO HISTÓRICO PARA EVITAR PESO
             } else if (newDesc) {
-                // CRIA NOVO REGISTRO
                 hist.push({ 
                     date: newDate, 
                     desc: newDesc, 
                     km: newKm, 
-                    recordedAt: new Date().toISOString(),
-                    photos: [...this.tempPhotos]
+                    recordedAt: new Date().toISOString()
+                    // photos: [...this.tempPhotos] 
                 });
             }
         }
@@ -381,7 +367,7 @@ checklistItemsData: [
             },
             maintenanceHistory: hist,
             observacoes: document.getElementById('f-obs').value,
-            fotos: this.tempPhotos,
+            fotos: this.tempPhotos, // AS FOTOS FICAM AQUI (NO CARD)
             updatedAt: new Date().toISOString()
         };
 
@@ -450,7 +436,6 @@ checklistItemsData: [
         div.style.display = (status === 'Manutenção') ? 'block' : 'none';
     },
 
-    // DASHBOARD
     async openDashboard() {
         document.getElementById('dashboard-modal').style.display = 'flex';
         const list = document.getElementById('dashboard-workshops-list');
@@ -497,17 +482,15 @@ checklistItemsData: [
         if(!this.dashboardData) return alert("Aguarde o carregamento.");
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-
+        
         doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 30, 'F');
         doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.setFont("helvetica", "bold");
         doc.text("STATUS ATUAL DA FROTA", 105, 18, {align:"center"});
-
         if(LOGO_BASE64) await this.drawSmartLogo(doc, LOGO_BASE64, 'center', 40, 60, 40);
 
         doc.setTextColor(0);
         doc.setFontSize(12); doc.setFont("helvetica", "normal");
         doc.text(`Data: ${new Date().toLocaleString()}`, 105, 90, {align:"center"});
-
         doc.setFontSize(14); doc.setFont("helvetica", "bold");
         doc.text("RESUMO GERAL", 14, 110);
         doc.setFontSize(12); doc.setFont("helvetica", "normal");
@@ -540,7 +523,7 @@ checklistItemsData: [
         doc.save("Dashboard_Snapshot.pdf");
     },
 
-    // RELATÓRIOS PERIÓDICOS
+    // RELATÓRIOS (CORRIGIDO AQUI: PEGA AS FOTOS DO VEÍCULO, NÃO DO HISTÓRICO)
     openReportModal() { document.getElementById('report-modal').style.display = 'flex'; },
 
     async generatePeriodReport() {
@@ -564,7 +547,6 @@ checklistItemsData: [
         doc.setFontSize(14); doc.setFont("helvetica", "normal");
         doc.text(`${this.fmtDate(start)}  até  ${this.fmtDate(end)}`, 105, 165, {align:"center"});
 
-        // DADOS
         let allVehicles = [];
         if (type === 'global') {
             for (const sec of this.sectors) {
@@ -576,20 +558,34 @@ checklistItemsData: [
         }
 
         let body = [];
-        let photos = [];
+        let vehiclesToPrint = []; // LISTA PARA FOTOS (ATUAIS)
         const dStart = new Date(start); const dEnd = new Date(end);
 
         allVehicles.forEach(v => {
+            let hasActivity = false;
             if(v.maintenanceHistory) {
                 v.maintenanceHistory.forEach(log => {
                     const d = new Date(log.date);
                     if(d >= dStart && d <= dEnd) {
                         body.push([this.fmtDate(log.date), v.placa, v.modelo, log.desc, v.workshopName || '-']);
-                        if(log.photos && log.photos.length > 0) {
-                            photos.push({ placa: v.placa, modelo: v.modelo, date: log.date, images: log.photos });
-                        }
+                        hasActivity = true;
                     }
                 });
+            }
+
+            // AQUI ESTÁ A CORREÇÃO:
+            // SE O CARRO TEVE ATIVIDADE, USA AS FOTOS ATUAIS DO CARD (v.fotos)
+            if(hasActivity && v.fotos && v.fotos.length > 0) {
+                // Evita duplicatas se o carro teve 2 manutenções no mês
+                const exists = vehiclesToPrint.find(i => i.id === v.id);
+                if(!exists) {
+                    vehiclesToPrint.push({
+                        id: v.id,
+                        placa: v.placa,
+                        modelo: v.modelo,
+                        images: v.fotos // <-- FOTOS DO CARD (As mesmas que você vê ao editar)
+                    });
+                }
             }
         });
 
@@ -598,17 +594,18 @@ checklistItemsData: [
         doc.addPage();
         doc.autoTable({ startY: 20, head: [['Data', 'Placa', 'Modelo', 'Serviço', 'Oficina']], body: body, theme:'striped', headStyles: { fillColor: [0, 86, 179] } });
 
-        if(photos.length > 0) {
+        // FOTOS
+        if(vehiclesToPrint.length > 0) {
             doc.addPage();
             doc.setFillColor(0, 86, 179); doc.rect(0, 0, 210, 20, 'F');
             doc.setTextColor(255, 255, 255); doc.setFontSize(12); doc.setFont("helvetica", "bold");
-            doc.text("REGISTROS FOTOGRÁFICOS", 105, 13, {align:"center"});
+            doc.text("FOTOS ATUAIS DOS VEÍCULOS LISTADOS", 105, 13, {align:"center"});
             let y = 30;
-            for(const item of photos) {
+            for(const item of vehiclesToPrint) {
                 if(y > 240) { doc.addPage(); y=30; }
                 doc.setFillColor(230,230,230); doc.rect(14, y-6, 182, 8, 'F');
                 doc.setTextColor(0); doc.setFontSize(10); 
-                doc.text(`${item.placa} - ${this.fmtDate(item.date)}`, 16, y);
+                doc.text(`${item.placa} - ${item.modelo}`, 16, y);
                 y += 10;
                 let xPos = 15;
                 for (let i = 0; i < item.images.length; i++) {
@@ -625,7 +622,7 @@ checklistItemsData: [
     },
 
     // =================================================================
-    // 6. ESTOQUE & CHECKLIST
+    // 7. ESTOQUE & CHECKLIST
     // =================================================================
     openStock() { document.getElementById('stock-modal').style.display = 'flex'; this.renderStockList(); },
     renderStockList() {
@@ -678,7 +675,6 @@ checklistItemsData: [
         await tx.store.put(i); await tx.done;
         if(navigator.onLine) this.db.collection(`estoque_${this.currentLocation}`).doc(i.id).set(i);
     },
-    // Checklist
     openChecklist() { document.getElementById('checklist-screen').style.display='flex'; this.renderChecklistForm(); this.setupSignaturePad(); },
     closeChecklist() { document.getElementById('checklist-screen').style.display='none'; },
     renderChecklistForm() {
