@@ -9,7 +9,7 @@ const app = {
     vehicles: [], stock: [], sectors: [], workshops: [],
     tempPhotos: [], db: null, dbLocal: null,
     currentLocation: "", collectionName: "",
-    userRole: "", adminUser: "Adm", adminPass: "Pref123",
+    userRole: "", adminUser: "Adm", adminPass: "12345",
     currentStockId: null,
     dashboardData: null, // Armazena dados para o relatório do dash
 
