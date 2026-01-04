@@ -2,24 +2,22 @@ const app = {
     // ESTADO
     vehicles: [], stock: [], tempPhotos: [], db: null, dbLocal: null,
     currentLocation: "", collectionName: "",
-    userRole: "", adminUser: "Adm", adminPass: "Pref123",
+    userRole: "", adminUser: "Adm", adminPass: "123",
     currentStockId: null, // Para saber qual item estamos editando no histórico
 
- 
-    // =================================================================
-    // 2. CONFIGURAÇÃO FIREBASE (Use a sua mesma config)
-    // =================================================================
-    firebaseConfig: { 
-        apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
+    // CONFIGURAÇÃO (COLOQUE SUAS CHAVES AQUI)
+    firebaseConfig: {
+  apiKey: "AIzaSyD4le1UcMBqgrBINl9Qt4Sb3dJsVqMygy0",
   authDomain: "gestao-de-veiculos-municipal.firebaseapp.com",
   projectId: "gestao-de-veiculos-municipal",
   storageBucket: "gestao-de-veiculos-municipal.firebasestorage.app",
   messagingSenderId: "989679906816",
   appId: "1:989679906816:web:70480b9283fbe2b5b8a8e5",
   measurementId: "G-MNTBB5LB9Y"
- },
 
-// CHECKLIST DATA
+    },
+
+    // CHECKLIST DATA
     checklistItemsData: [
         {id: "1", text: "Nível de Óleo / Água"},
         {id: "2", text: "Freios e Fluídos"},
