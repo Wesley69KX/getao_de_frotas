@@ -37,6 +37,34 @@
         </div>
     </div>
 
+    <div id="location-screen" class="login-overlay" style="display:none;">
+        <div class="login-box" style="max-width: 600px;">
+            <h3 style="color:var(--primary)">Selecione o Setor</h3>
+            <p style="color:#666; font-size:14px; margin-bottom:25px;">Qual secretaria você está atendendo?</p>
+            
+            <div class="location-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <button class="btn-location" onclick="app.selectLocation('SAUDE')">
+                    <span class="material-icons" style="font-size:36px; color:#dc3545; margin-bottom:8px;">ambulance</span>
+                    SAÚDE
+                </button>
+                <button class="btn-location" onclick="app.selectLocation('EDUCACAO')">
+                    <span class="material-icons" style="font-size:36px; color:#ffc107; margin-bottom:8px;">school</span>
+                    EDUCAÇÃO
+                </button>
+                <button class="btn-location" onclick="app.selectLocation('OBRAS')">
+                    <span class="material-icons" style="font-size:36px; color:#fd7e14; margin-bottom:8px;">engineering</span>
+                    OBRAS
+                </button>
+                <button class="btn-location" onclick="app.selectLocation('ADM')">
+                    <span class="material-icons" style="font-size:36px; color:#0056b3; margin-bottom:8px;">business</span>
+                    ADM
+                </button>
+            </div>
+            
+            <button class="btn-login-visitor" onclick="location.reload()" style="margin-top:20px; background:#6c757d; color:white;">Voltar</button>
+        </div>
+    </div>
+
     <div id="app-content" style="display:none;">
         <header>
             <div class="header-top">
