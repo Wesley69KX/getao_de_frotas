@@ -1,6 +1,6 @@
 {
-  "name": "Gestão de Torres",
-  "short_name": "Torres V2",
+  "name": "Gestão de Frota Municipal",
+  "short_name": "Frota Gov",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0056b3",
