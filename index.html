@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gestão de Frota</title>
+    <title>Gestão de Frota Pro</title>
     
     <link rel="manifest" href="manifest.json">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -25,73 +25,50 @@
     <div id="login-screen" class="login-overlay">
         <div class="login-box">
             <h2>Gestão de Frota</h2>
-            <p style="color: #888; font-size:13px; margin-bottom:20px;">Prefeitura Municipal</p>
+            <p style="color: #888; margin-bottom:20px;">Prefeitura Municipal</p>
             <div class="input-group">
-                <label>Usuário</label>
-                <input type="text" id="login-user" placeholder="Matrícula/Usuário">
+                <input type="text" id="login-user" placeholder="Usuário">
             </div>
-            <div class="input-group">
-                <label>Senha</label>
+            <div class="input-group" style="margin-top:10px;">
                 <input type="password" id="login-pass" placeholder="Senha">
             </div>
+            <br>
             <button class="btn-login-admin" onclick="app.checkLogin()">Acessar Sistema</button>
-        </div>
-    </div>
-
-    <div id="location-screen" class="login-overlay" style="display:none;">
-        <div class="login-box" style="max-width: 600px;">
-            <h3 style="color:var(--primary)">Selecione o Setor</h3>
-            <p style="color:#666; font-size:14px; margin-bottom:25px;">Qual secretaria você está atendendo?</p>
-            
-            <div class="location-grid">
-                <button class="btn-location" onclick="app.selectLocation('SAUDE')">
-                    <span class="material-icons" style="font-size:36px; color:#dc3545; margin-bottom:8px;">ambulance</span>
-                    SAÚDE
-                    <small>Ambulâncias e Apoio</small>
-                </button>
-                <button class="btn-location" onclick="app.selectLocation('EDUCACAO')">
-                    <span class="material-icons" style="font-size:36px; color:#ffc107; margin-bottom:8px;">school</span>
-                    EDUCAÇÃO
-                    <small>Transporte Escolar</small>
-                </button>
-                <button class="btn-location" onclick="app.selectLocation('OBRAS')">
-                    <span class="material-icons" style="font-size:36px; color:#fd7e14; margin-bottom:8px;">engineering</span>
-                    OBRAS
-                    <small>Maquinário Pesado</small>
-                </button>
-                <button class="btn-location" onclick="app.selectLocation('ADM')">
-                    <span class="material-icons" style="font-size:36px; color:#0056b3; margin-bottom:8px;">business</span>
-                    ADM
-                    <small>Gabinete e Fiscalização</small>
-                </button>
-            </div>
-            
-            <button class="btn-login-visitor" onclick="location.reload()" style="margin-top:20px; background:#6c757d; color:white;">Sair</button>
         </div>
     </div>
 
     <div id="app-content" style="display:none;">
         <header>
             <div class="header-top">
-                <h1><span id="current-loc-badge" class="loc-badge">...</span> Frota</h1>
+                <div style="display:flex; align-items:center; gap:10px; width:100%;">
+                    <span class="material-icons" style="color:var(--primary)">local_shipping</span>
+                    <select id="nav-sector" onchange="app.switchLocation(this.value)" style="flex:1; font-weight:bold; color:var(--primary); border:none; background:transparent; font-size:1.1rem;">
+                        <option value="" disabled selected>Selecione o Setor</option>
+                        <option value="SAUDE">SAÚDE</option>
+                        <option value="EDUCACAO">EDUCAÇÃO</option>
+                        <option value="OBRAS">OBRAS</option>
+                        <option value="ADM">ADM</option>
+                    </select>
+                </div>
             </div>
+            
             <div class="header-actions">
-                <button class="btn-action btn-checklist" onclick="app.openChecklist()">📋 Checklist</button>
+                <button class="btn-action" style="background:#28a745" onclick="app.openNewVehicle()">+ Novo</button>
+                <button class="btn-action btn-checklist" onclick="app.openChecklist()">📋 Check</button>
                 <button class="btn-action" style="background:#6f42c1" onclick="app.openStock()">📦 Estoque</button>
                 <button class="btn-global-pdf" onclick="app.generateGlobalPDF()">📄 Relatório</button>
                 <button class="btn-sync" onclick="app.syncNow()">🔄 Sync</button>
-                <button class="btn-exit" onclick="window.location.reload()">Sair</button>
             </div>
         </header>
 
         <div class="container">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <input type="text" id="search" class="search-bar" placeholder="🔍 Buscar placa ou modelo..." onkeyup="app.filterList()" style="flex:1; margin-right:10px;">
-                <span style="font-size:12px; color:#666;">Veículos: <strong id="total-card">0</strong></span>
+                <input type="text" id="search" class="search-bar" placeholder="🔍 Buscar placa..." onkeyup="app.filterList()" style="flex:1; margin-right:10px; margin-bottom:0;">
+                <span style="font-size:12px; color:#666; white-space:nowrap;">Total: <strong id="total-card">0</strong></span>
             </div>
             
             <div id="loading-msg" style="text-align:center; padding:20px; color:#0056b3; font-weight:bold;">
-                <span class="material-icons" style="vertical-align:middle; animation:spin 1s infinite linear; font-size:16px;">autorenew</span> Carregando...
+                <span class="material-icons" style="vertical-align:middle; animation:spin 1s infinite linear;">autorenew</span> Carregando...
             </div>
             
             <div id="vehicle-list" class="tower-list"></div>
@@ -101,51 +78,45 @@
     <div id="modal" class="modal">
         <form id="vehicle-form" onsubmit="app.saveVehicle(event)" class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-title"><span class="material-icons" style="vertical-align:middle">directions_car</span> Editar Veículo</h2>
+                <h2 id="modal-title">Veículo</h2>
                 <span class="close" onclick="app.closeModal()">&times;</span>
             </div>
             
             <div class="modal-body">
-                <input type="hidden" id="veh-id">
-                
-                <div class="form-section">
-                    <h3>Identificação</h3>
+                <input type="hidden" id="veh-id"> <div class="form-section">
+                    <h3>Dados Principais</h3>
                     <div class="form-row">
-                        <div><label>Placa</label><input type="text" id="f-placa" class="readonly-input" readonly></div>
-                        <div><label>Modelo</label><input type="text" id="f-modelo"></div>
+                        <div><label>Placa</label><input type="text" id="f-placa" placeholder="ABC-1234"></div>
+                        <div><label>Modelo</label><input type="text" id="f-modelo" placeholder="Ex: Gol 1.6"></div>
                     </div>
                     <div class="form-row">
                         <div><label>Status</label>
                             <select id="f-status">
-                                <option value="Operando">Operando (Verde)</option>
-                                <option value="Manutenção">Oficina (Amarelo)</option>
-                                <option value="Baixado">Baixado (Vermelho)</option>
+                                <option value="Operando">Operando</option>
+                                <option value="Manutenção">Oficina</option>
+                                <option value="Baixado">Baixado</option>
                             </select>
                         </div>
-                        <div><label>Quilometragem (Km)</label><input type="number" id="f-km"></div>
+                        <div><label>Km Atual</label><input type="number" id="f-km"></div>
                     </div>
                 </div>
 
                 <div class="form-section">
-                    <h3>Manutenção</h3>
+                    <h3>Histórico Manutenção</h3>
                     <div class="two-col">
                         <div><label>Última Revisão</label><input type="date" id="f-manu-ultima"></div>
-                        <div><label>Próx. Revisão (Km/Data)</label><input type="text" id="f-manu-proxima"></div>
+                        <div><label>Próx. Revisão</label><input type="text" id="f-manu-proxima"></div>
                     </div>
-                    <label>Peças Trocadas</label><textarea id="f-pecas" rows="2"></textarea>
-                    <label>Serviços Pendentes</label><textarea id="f-pendencias" rows="2" style="border-color: orange;"></textarea>
+                    <label>Peças/Serviços Realizados</label><textarea id="f-pecas" rows="2"></textarea>
+                    <label>Pendências</label><textarea id="f-pendencias" rows="2" style="border-color:orange;"></textarea>
                 </div>
 
                 <div class="form-section">
                     <h3>Fotos & Obs</h3>
                     <label>Observações</label><textarea id="f-obs" rows="3"></textarea>
-                    
                     <div class="photo-area">
-                        <p style="margin-bottom:10px; font-weight:bold; color:#666;">
-                            <span class="material-icons" style="vertical-align:middle">add_a_photo</span> Fotos do Veículo
-                        </p>
                         <input type="file" id="image-input" multiple onchange="app.handleImagePreview(event)" style="display:none" accept="image/*">
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('image-input').click()" style="width:auto">Selecionar</button>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('image-input').click()">+ Fotos</button>
                         <div id="image-preview-container" class="image-preview-container"></div>
                     </div>
                 </div>
@@ -153,26 +124,50 @@
 
             <div class="modal-footer">
                 <button type="button" class="btn-cancel" onclick="app.closeModal()">Cancelar</button>
-                <button type="submit" class="btn-save">Salvar Dados</button>
+                <button type="submit" class="btn-save">Salvar</button>
             </div>
         </form>
     </div>
 
     <div id="stock-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2><span class="material-icons" style="vertical-align:middle">inventory_2</span> Controle de Estoque</h2>
+                <h2>📦 Controle de Estoque</h2>
                 <span class="close" onclick="document.getElementById('stock-modal').style.display='none'">&times;</span>
             </div>
             <div class="modal-body">
-                <div class="form-row">
-                    <div><input type="text" id="stock-name" placeholder="Nome da Peça (ex: Filtro de Óleo)"></div>
-                    <div><input type="number" id="stock-qtd" placeholder="Qtd" style="width:80px"></div>
-                    <button type="button" class="btn-success" onclick="app.addStockItem()" style="width:auto">Adicionar</button>
-                </div>
-                <hr>
-                <div id="stock-list" style="margin-top:15px;">
+                <div style="background:#e9ecef; padding:15px; border-radius:8px; margin-bottom:20px;">
+                    <h4>Cadastrar Nova Peça</h4>
+                    <div class="form-row" style="display:flex; gap:10px;">
+                        <input type="text" id="stock-new-name" placeholder="Nome da Peça" style="flex:2; margin:0;">
+                        <input type="number" id="stock-new-min" placeholder="Mínimo" style="flex:1; margin:0;">
+                        <button type="button" class="btn-save" onclick="app.createStockItem()" style="flex:1; margin:0;">Criar</button>
                     </div>
+                </div>
+
+                <h3>Itens em Estoque</h3>
+                <div id="stock-list" style="max-height:300px; overflow-y:auto; margin-bottom:20px;"></div>
+
+                <div id="stock-history-panel" style="display:none; border-top:2px solid #ddd; padding-top:20px;">
+                    <h3 style="color:var(--primary)">Histórico: <span id="hist-item-name"></span></h3>
+                    
+                    <div class="form-row" style="background:#fff3cd; padding:10px; border-radius:8px; margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+                        <select id="hist-type" style="margin:0; flex:1;">
+                            <option value="SAIDA">⬇️ SAÍDA (Uso)</option>
+                            <option value="ENTRADA">⬆️ ENTRADA (Compra)</option>
+                        </select>
+                        <input type="number" id="hist-qtd" placeholder="Qtd" style="margin:0; flex:1;">
+                        <button onclick="app.addStockMovement()" style="background:#333; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer;">Registrar</button>
+                    </div>
+
+                    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                        <thead>
+                            <tr style="background:#eee; text-align:left;"><th style="padding:8px;">Data</th><th>Tipo</th><th>Qtd</th><th>Usuário</th></tr>
+                        </thead>
+                        <tbody id="hist-table-body"></tbody>
+                    </table>
+                    <button onclick="document.getElementById('stock-history-panel').style.display='none'" style="margin-top:10px; width:100%; padding:10px;">Fechar Histórico</button>
+                </div>
             </div>
         </div>
     </div>
@@ -185,25 +180,18 @@
         </div>
         <div class="checklist-content">
             <div class="check-section">
-                <h3>Dados do Veículo</h3>
-                <div class="form-group">
-                    <label>Placa / Veículo</label>
-                    <input type="text" id="chk-placa" placeholder="Ex: ABC-1234 Gol">
-                </div>
+                <h3>Dados Iniciais</h3>
+                <div class="form-group"><label>Veículo/Placa</label><input type="text" id="chk-placa"></div>
                 <div class="two-col">
                     <div><label>Data</label><input type="date" id="chk-data"></div>
-                    <div><label>Km Atual</label><input type="number" id="chk-km"></div>
+                    <div><label>Km</label><input type="number" id="chk-km"></div>
                 </div>
-                <label>Motorista/Responsável</label><input type="text" id="chk-resp">
+                <label>Motorista</label><input type="text" id="chk-resp">
             </div>
-
             <div id="checklist-items-container"></div>
-
             <div class="check-section">
-                <h3>Assinatura Mecânico/Fiscal</h3>
-                <div class="signature-pad-wrapper">
-                    <canvas id="signature-pad"></canvas>
-                </div>
+                <h3>Assinatura</h3>
+                <div class="signature-pad-wrapper"><canvas id="signature-pad"></canvas></div>
                 <button type="button" class="btn-clear-sig" onclick="app.clearSignature()">Limpar</button>
             </div>
             <div style="height:50px;"></div>
@@ -215,11 +203,10 @@
             <span id="sync-spinner" class="material-icons sync-spinner">autorenew</span>
             <span id="sync-icon-ok" class="material-icons sync-success-icon">check_circle</span>
             <h3 id="sync-title">Sincronizando...</h3>
-            <p id="sync-msg" style="color:#666;">Atualizando dados da frota.</p>
+            <p id="sync-msg" style="color:#666;">Atualizando dados.</p>
         </div>
     </div>
 
     <script src="app.js"></script>
-
 </body>
 </html>
